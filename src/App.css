@@ -1,0 +1,1354 @@
+
+/* Define reusable colours and design values for the entire dashboard. */
+:root {
+  /* Set the main page background to a soft off-white colour. */
+  --page-bg: #f6f8f6;
+
+  /* Set the panel background to white. */
+  --surface: #ffffff;
+
+  /* Set the primary brand colour to forest green. */
+  --primary: #176b4d;
+
+  /* Set a darker green for hover states and emphasis. */
+  --primary-dark: #10543c;
+
+  /* Set a pale green background for selected items. */
+  --primary-light: #e8f4ed;
+
+  /* Set the main text colour. */
+  --text-main: #1c2b23;
+
+  /* Set the secondary text colour. */
+  --text-muted: #77847b;
+
+  /* Set a subtle border colour. */
+  --border: #e6ebe7;
+
+  /* Set a light red colour for critical stock alerts. */
+  --danger-bg: #fdeceb;
+
+  /* Set a dark red colour for critical alert text. */
+  --danger-text: #bd3d35;
+
+  /* Set a pale amber background for low-stock alerts. */
+  --warning-bg: #fff4dc;
+
+  /* Set a dark amber colour for low-stock text. */
+  --warning-text: #996515;
+
+  /* Set a pale green background for healthy stock. */
+  --success-bg: #e5f5e9;
+
+  /* Set a dark green colour for healthy stock text. */
+  --success-text: #287744;
+
+  /* Define a consistent rounded corner size. */
+  --radius: 16px;
+
+  /* Define a subtle shadow for dashboard panels. */
+  --shadow: 0 4px 20px rgba(31, 60, 42, 0.045);
+}
+
+/* Apply predictable sizing to every element. */
+* {
+  /* Include padding and borders within the declared width and height. */
+  box-sizing: border-box;
+}
+
+/* Define the default page appearance. */
+body {
+  /* Remove the browser's default outer spacing. */
+  margin: 0;
+
+  /* Use a clean, readable font stack. */
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+
+  /* Apply the dashboard background colour. */
+  background: var(--page-bg);
+
+  /* Apply the main text colour. */
+  color: var(--text-main);
+
+  /* Improve readability with comfortable line spacing. */
+  line-height: 1.5;
+}
+
+/* Make form controls inherit the application's font. */
+button,
+input,
+select {
+  /* Keep typography consistent across interactive elements. */
+  font: inherit;
+}
+
+/* Remove default heading spacing where needed. */
+h1,
+h2,
+p {
+  /* Reset default margins so spacing can be controlled by components. */
+  margin-top: 0;
+}
+
+/* Create the main two-column application layout. */
+.app-shell {
+  /* Use a grid to separate the sidebar from the main content. */
+  display: grid;
+
+  /* Keep the sidebar at a fixed width and let the content fill remaining space. */
+  grid-template-columns: 250px minmax(0, 1fr);
+
+  /* Ensure the dashboard fills at least the screen height. */
+  min-height: 100vh;
+}
+
+/* Style the left navigation sidebar. */
+.sidebar {
+  /* Give the sidebar a dark forest-green background. */
+  background: #123f30;
+
+  /* Use light text for contrast against the dark background. */
+  color: #f4faf6;
+
+  /* Add internal spacing around sidebar content. */
+  padding: 30px 18px 22px;
+
+  /* Arrange the brand, navigation, and footer vertically. */
+  display: flex;
+
+  /* Set the layout direction to vertical. */
+  flex-direction: column;
+
+  /* Keep the sidebar at least as tall as the screen. */
+  min-height: 100vh;
+}
+
+/* Arrange the brand mark and brand text horizontally. */
+.brand {
+  /* Place the logo and brand name on the same row. */
+  display: flex;
+
+  /* Align both items vertically. */
+  align-items: center;
+
+  /* Add space between the logo and text. */
+  gap: 12px;
+
+  /* Add spacing below the brand area. */
+  margin-bottom: 44px;
+
+  /* Add left and right padding. */
+  padding: 0 8px;
+}
+
+/* Style the square logo mark. */
+.brand-mark {
+  /* Set the logo width. */
+  width: 43px;
+
+  /* Set the logo height. */
+  height: 43px;
+
+  /* Center the logo letter horizontally. */
+  display: flex;
+
+  /* Center the logo letter vertically. */
+  align-items: center;
+
+  /* Center the logo letter along the horizontal axis. */
+  justify-content: center;
+
+  /* Give the logo a light green background. */
+  background: #e1f2e7;
+
+  /* Give the logo a dark green letter colour. */
+  color: #15583e;
+
+  /* Round the logo corners. */
+  border-radius: 13px;
+
+  /* Make the logo letter prominent. */
+  font-size: 22px;
+
+  /* Make the logo letter bold. */
+  font-weight: 800;
+
+  /* Prevent the logo from shrinking in flex layouts. */
+  flex-shrink: 0;
+}
+
+/* Style the decorative dot inside the logo. */
+.brand-mark span {
+  /* Apply the brighter green accent colour. */
+  color: #46a876;
+}
+
+/* Arrange the brand name and subtitle vertically. */
+.brand-copy {
+  /* Use a vertical flex layout. */
+  display: flex;
+
+  /* Stack the brand name and subtitle. */
+  flex-direction: column;
+
+  /* Keep the two text elements close together. */
+  gap: 2px;
+}
+
+/* Style the product name. */
+.brand-copy strong {
+  /* Set the product name font size. */
+  font-size: 20px;
+
+  /* Make the product name bold. */
+  font-weight: 750;
+
+  /* Slightly tighten the letter spacing. */
+  letter-spacing: -0.5px;
+}
+
+/* Highlight the AI portion of the product name. */
+.brand-copy strong span {
+  /* Use a soft green accent. */
+  color: #8bd2a8;
+}
+
+/* Style the product category subtitle. */
+.brand-copy small {
+  /* Use a smaller font size. */
+  font-size: 9px;
+
+  /* Increase letter spacing for the uppercase label. */
+  letter-spacing: 1.2px;
+
+  /* Use a muted green-white colour. */
+  color: #bbd3c4;
+}
+
+/* Style the workspace label above navigation. */
+.workspace-label {
+  /* Add space below the label. */
+  margin: 0 10px 12px;
+
+  /* Set a compact label size. */
+  font-size: 10px;
+
+  /* Make the label bold. */
+  font-weight: 700;
+
+  /* Increase letter spacing. */
+  letter-spacing: 1.6px;
+
+  /* Use a muted colour to distinguish it from page names. */
+  color: #a8c5b5;
+}
+
+/* Arrange navigation buttons vertically. */
+.sidebar-nav {
+  /* Use a vertical flex layout for the buttons. */
+  display: flex;
+
+  /* Stack the buttons from top to bottom. */
+  flex-direction: column;
+
+  /* Add consistent space between buttons. */
+  gap: 6px;
+}
+
+/* Style every sidebar navigation button. */
+.nav-item {
+  /* Allow the button to fill the sidebar width. */
+  width: 100%;
+
+  /* Remove the browser's default border. */
+  border: 0;
+
+  /* Keep button backgrounds transparent by default. */
+  background: transparent;
+
+  /* Use a muted light text colour. */
+  color: #c5d8cc;
+
+  /* Align the button text to the left. */
+  text-align: left;
+
+  /* Add comfortable internal spacing. */
+  padding: 12px 13px;
+
+  /* Round the button corners. */
+  border-radius: 10px;
+
+  /* Display the pointer cursor on hover. */
+  cursor: pointer;
+
+  /* Align button text consistently. */
+  display: flex;
+
+  /* Vertically center button content. */
+  align-items: center;
+
+  /* Set a readable button font size. */
+  font-size: 13px;
+
+  /* Animate background and colour changes. */
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+/* Change the navigation appearance when the pointer hovers over it. */
+.nav-item:hover {
+  /* Apply a subtle translucent green background. */
+  background: rgba(255, 255, 255, 0.08);
+
+  /* Brighten the text colour. */
+  color: #ffffff;
+}
+
+/* Highlight the currently selected navigation item. */
+.nav-item.active {
+  /* Apply a visible green background. */
+  background: #28684e;
+
+  /* Use white text for strong contrast. */
+  color: #ffffff;
+
+  /* Make the selected page label slightly bolder. */
+  font-weight: 650;
+}
+
+/* Push the sidebar footer toward the bottom. */
+.sidebar-footer {
+  /* Use the available remaining vertical space above the footer. */
+  margin-top: auto;
+
+  /* Add space above the footer content. */
+  padding: 24px 10px 0;
+
+  /* Add a subtle separator line. */
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+/* Display the two main footer lines as blocks. */
+.sidebar-footer strong {
+  /* Place each strong element on its own line. */
+  display: block;
+
+  /* Use a slightly larger font size. */
+  font-size: 13px;
+}
+
+/* Style the short footer tagline. */
+.sidebar-footer p {
+  /* Add space above the tagline. */
+  margin: 10px 0 0;
+
+  /* Use smaller muted text. */
+  font-size: 11px;
+
+  /* Reduce the text brightness slightly. */
+  color: #b4ccbe;
+}
+
+/* Define the main content column. */
+.main-area {
+  /* Prevent long content from forcing the grid wider than the screen. */
+  min-width: 0;
+}
+
+/* Style the horizontal header bar. */
+.topbar {
+  /* Align the breadcrumb and demo indicator horizontally. */
+  display: flex;
+
+  /* Place one item at each end of the header. */
+  justify-content: space-between;
+
+  /* Align the items vertically. */
+  align-items: center;
+
+  /* Set the header's minimum height. */
+  min-height: 72px;
+
+  /* Add horizontal spacing. */
+  padding: 16px 38px;
+
+  /* Use a white background. */
+  background: var(--surface);
+
+  /* Separate the header from the page content. */
+  border-bottom: 1px solid var(--border);
+}
+
+/* Style the breadcrumb text. */
+.breadcrumb {
+  /* Set a compact font size. */
+  font-size: 12px;
+
+  /* Use the secondary text colour. */
+  color: var(--text-muted);
+}
+
+/* Highlight the current page in the breadcrumb. */
+.breadcrumb strong {
+  /* Use the primary text colour. */
+  color: var(--text-main);
+
+  /* Give the current page extra emphasis. */
+  font-weight: 650;
+}
+
+/* Style the demo environment indicator. */
+.demo-indicator {
+  /* Prevent the indicator from wrapping unnecessarily. */
+  white-space: nowrap;
+
+  /* Set a small text size. */
+  font-size: 11px;
+
+  /* Use the secondary text colour. */
+  color: var(--text-muted);
+}
+
+/* Add spacing around the main page content. */
+.page-content {
+  /* Set the maximum visual content width and center it. */
+  width: 100%;
+
+  /* Add consistent page padding. */
+  padding: 34px 38px;
+
+  /* Avoid content exceeding the available area. */
+  min-width: 0;
+}
+
+/* Arrange the welcome text and period selector. */
+.welcome-row {
+  /* Put the welcome content and dropdown on one row. */
+  display: flex;
+
+  /* Place the text and selector at opposite ends. */
+  justify-content: space-between;
+
+  /* Align the content vertically. */
+  align-items: center;
+
+  /* Add space below the welcome section. */
+  margin-bottom: 25px;
+
+  /* Add space between the two elements when the layout narrows. */
+  gap: 20px;
+}
+
+/* Style the small uppercase category label. */
+.eyebrow {
+  /* Display the label as a block above the heading. */
+  display: block;
+
+  /* Add space below the label. */
+  margin-bottom: 8px;
+
+  /* Set a compact font size. */
+  font-size: 10px;
+
+  /* Use the primary green colour. */
+  color: var(--primary);
+
+  /* Make the label bold. */
+  font-weight: 750;
+
+  /* Increase letter spacing. */
+  letter-spacing: 1.3px;
+}
+
+/* Style the main page heading. */
+.welcome-row h1 {
+  /* Remove the default top margin. */
+  margin: 0 0 8px;
+
+  /* Set a prominent heading size. */
+  font-size: clamp(25px, 2.4vw, 34px);
+
+  /* Tighten the heading's letter spacing. */
+  letter-spacing: -1.1px;
+
+  /* Use a strong heading weight. */
+  font-weight: 750;
+
+  /* Improve the heading's line height. */
+  line-height: 1.2;
+}
+
+/* Style the decorative dot after the page heading. */
+.heading-period {
+  /* Apply the brand green colour. */
+  color: var(--primary);
+}
+
+/* Style the introductory paragraph beneath the heading. */
+.welcome-row p {
+  /* Remove the default paragraph margin. */
+  margin: 0;
+
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a readable paragraph size. */
+  font-size: 13px;
+}
+
+/* Style the reporting-period dropdown container. */
+.period-select {
+  /* Keep the dropdown from shrinking excessively. */
+  flex-shrink: 0;
+}
+
+/* Style the reporting-period dropdown. */
+.period-select select {
+  /* Set a minimum dropdown width. */
+  min-width: 112px;
+
+  /* Add internal spacing. */
+  padding: 10px 12px;
+
+  /* Add a subtle border. */
+  border: 1px solid var(--border);
+
+  /* Round the dropdown corners. */
+  border-radius: 10px;
+
+  /* Use a white background. */
+  background: #ffffff;
+
+  /* Use the main text colour. */
+  color: var(--text-main);
+
+  /* Set a compact font size. */
+  font-size: 12px;
+
+  /* Display a pointer cursor. */
+  cursor: pointer;
+
+  /* Remove the default outline only when replaced by a focus style. */
+  outline-offset: 3px;
+}
+
+/* Create the medicine search bar. */
+.search-row {
+  /* Arrange the icon and input horizontally. */
+  display: flex;
+
+  /* Align the icon and input vertically. */
+  align-items: center;
+
+  /* Add space between the icon and input. */
+  gap: 10px;
+
+  /* Give the search bar a white background. */
+  background: #ffffff;
+
+  /* Add a subtle border. */
+  border: 1px solid var(--border);
+
+  /* Round the search bar corners. */
+  border-radius: 12px;
+
+  /* Add internal spacing. */
+  padding: 0 15px;
+
+  /* Set a consistent search bar height. */
+  min-height: 48px;
+
+  /* Add space below the search bar. */
+  margin-bottom: 18px;
+
+  /* Animate the border colour on focus. */
+  transition: border-color 0.2s ease;
+}
+
+/* Highlight the search bar when one of its fields has focus. */
+.search-row:focus-within {
+  /* Use the primary green for the focused border. */
+  border-color: var(--primary);
+}
+
+/* Style the search symbol. */
+.search-icon {
+  /* Set the icon size. */
+  font-size: 23px;
+
+  /* Use the secondary text colour. */
+  color: var(--text-muted);
+}
+
+/* Style the search input. */
+.search-row input {
+  /* Let the input occupy the remaining row width. */
+  flex: 1;
+
+  /* Allow the input to shrink inside the flex container. */
+  min-width: 0;
+
+  /* Remove the browser's default border. */
+  border: 0;
+
+  /* Remove the default focus outline from the input itself. */
+  outline: none;
+
+  /* Keep the input background transparent. */
+  background: transparent;
+
+  /* Use the main text colour. */
+  color: var(--text-main);
+
+  /* Set the input text size. */
+  font-size: 12px;
+}
+
+/* Style the placeholder text inside the search input. */
+.search-row input::placeholder {
+  /* Use a softer text colour for the hint. */
+  color: #9aa59e;
+}
+
+/* Style the demonstration-data warning banner. */
+.demo-banner {
+  /* Add internal spacing around the message. */
+  padding: 12px 15px;
+
+  /* Give the banner a pale green background. */
+  background: #edf6ef;
+
+  /* Add a subtle green border. */
+  border: 1px solid #dcecdf;
+
+  /* Round the banner corners. */
+  border-radius: 10px;
+
+  /* Set a compact font size. */
+  font-size: 11px;
+
+  /* Use a dark green text colour. */
+  color: #426b51;
+
+  /* Add space below the banner. */
+  margin-bottom: 25px;
+}
+
+/* Highlight the leading words in the demo warning. */
+.demo-banner strong {
+  /* Use the darker primary green. */
+  color: var(--primary-dark);
+}
+
+/* Arrange the KPI cards in a responsive grid. */
+.metrics-grid {
+  /* Use CSS Grid to organize the metric cards. */
+  display: grid;
+
+  /* Create four equal columns when space allows. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  /* Add consistent spacing between cards. */
+  gap: 17px;
+
+  /* Add space below the KPI row. */
+  margin-bottom: 22px;
+}
+
+/* Style each individual KPI card. */
+.metric-card {
+  /* Set the card background to white. */
+  background: var(--surface);
+
+  /* Add a subtle border. */
+  border: 1px solid var(--border);
+
+  /* Round the card corners. */
+  border-radius: var(--radius);
+
+  /* Add internal spacing. */
+  padding: 20px;
+
+  /* Apply a subtle shadow. */
+  box-shadow: var(--shadow);
+
+  /* Allow card content to fit its grid column. */
+  min-width: 0;
+}
+
+/* Style the icon box inside each KPI card. */
+.metric-icon {
+  /* Center the icon within its container. */
+  display: flex;
+
+  /* Align the icon vertically. */
+  align-items: center;
+
+  /* Align the icon horizontally. */
+  justify-content: center;
+
+  /* Set the icon box width. */
+  width: 38px;
+
+  /* Set the icon box height. */
+  height: 38px;
+
+  /* Use a pale green background. */
+  background: var(--primary-light);
+
+  /* Use the brand green for the icon. */
+  color: var(--primary);
+
+  /* Round the icon box corners. */
+  border-radius: 11px;
+
+  /* Set the icon font size. */
+  font-size: 17px;
+
+  /* Make text-based icons prominent. */
+  font-weight: 750;
+
+  /* Add space below the icon. */
+  margin-bottom: 18px;
+}
+
+/* Style the title of each KPI card. */
+.metric-title {
+  /* Add space below the title. */
+  margin-bottom: 7px;
+
+  /* Use the secondary text colour. */
+  color: var(--text-muted);
+
+  /* Set a compact font size. */
+  font-size: 11px;
+}
+
+/* Style the main KPI value. */
+.metric-value {
+  /* Add space below the value. */
+  margin-bottom: 8px;
+
+  /* Set a large metric font size. */
+  font-size: clamp(20px, 2vw, 27px);
+
+  /* Keep the metric on one line where possible. */
+  overflow-wrap: anywhere;
+
+  /* Tighten the number's letter spacing. */
+  letter-spacing: -0.7px;
+
+  /* Use a strong font weight. */
+  font-weight: 750;
+}
+
+/* Style the supporting KPI note. */
+.metric-note {
+  /* Remove the bottom margin. */
+  margin-bottom: 0;
+
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a small font size. */
+  font-size: 10px;
+}
+
+/* Arrange the lower dashboard panels in a grid. */
+.content-grid {
+  /* Use CSS Grid for the sales and action panels. */
+  display: grid;
+
+  /* Give the sales panel slightly more space than the action panel. */
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+
+  /* Add space between the panels. */
+  gap: 20px;
+
+  /* Add space below the grid. */
+  margin-bottom: 25px;
+}
+
+/* Apply shared styles to dashboard panels. */
+.panel {
+  /* Set the panel background to white. */
+  background: var(--surface);
+
+  /* Add a subtle border. */
+  border: 1px solid var(--border);
+
+  /* Round the panel corners. */
+  border-radius: var(--radius);
+
+  /* Add internal spacing. */
+  padding: 23px;
+
+  /* Apply a subtle shadow. */
+  box-shadow: var(--shadow);
+
+  /* Allow panel contents to fit the available width. */
+  min-width: 0;
+}
+
+/* Arrange panel headings and optional controls. */
+.section-heading {
+  /* Use a horizontal flex layout. */
+  display: flex;
+
+  /* Separate heading elements when multiple items exist. */
+  justify-content: space-between;
+
+  /* Align elements at the top. */
+  align-items: flex-start;
+
+  /* Add space below the heading. */
+  margin-bottom: 22px;
+
+  /* Add space between heading elements. */
+  gap: 12px;
+}
+
+/* Style the title within a section heading. */
+.section-heading h2,
+.panel > h2 {
+  /* Set a readable section title size. */
+  font-size: 16px;
+
+  /* Add space below the title. */
+  margin-bottom: 5px;
+
+  /* Use a strong font weight. */
+  font-weight: 700;
+
+  /* Tighten the title's letter spacing. */
+  letter-spacing: -0.3px;
+}
+
+/* Style the descriptive text within a section heading. */
+.section-heading p {
+  /* Remove the paragraph's bottom margin. */
+  margin-bottom: 0;
+
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a compact font size. */
+  font-size: 11px;
+}
+
+/* Arrange the sales label and value horizontally. */
+.sales-summary {
+  /* Use a flex layout. */
+  display: flex;
+
+  /* Place the label and amount at opposite ends. */
+  justify-content: space-between;
+
+  /* Align the two items vertically. */
+  align-items: center;
+
+  /* Add space below the summary. */
+  margin-bottom: 20px;
+
+  /* Add space between the label and amount. */
+  gap: 12px;
+}
+
+/* Style the revenue description. */
+.sales-summary span {
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a small font size. */
+  font-size: 11px;
+}
+
+/* Style the example revenue value. */
+.sales-summary strong {
+  /* Use a larger value size. */
+  font-size: 21px;
+
+  /* Apply the primary green. */
+  color: var(--primary);
+
+  /* Use a strong font weight. */
+  font-weight: 750;
+}
+
+/* Create the container for the simple sales chart. */
+.simple-chart {
+  /* Arrange the chart columns horizontally. */
+  display: flex;
+
+  /* Align the bars along the bottom edge. */
+  align-items: flex-end;
+
+  /* Distribute the bars evenly. */
+  justify-content: space-around;
+
+  /* Set the chart height. */
+  height: 165px;
+
+  /* Add space above the day labels. */
+  padding-top: 12px;
+
+  /* Add a subtle baseline beneath the bars. */
+  border-bottom: 1px solid var(--border);
+
+  /* Add space below the chart. */
+  margin-bottom: 14px;
+}
+
+/* Style each chart column. */
+.chart-column {
+  /* Let each column share the available width. */
+  flex: 1;
+
+  /* Arrange the bar and its label vertically. */
+  display: flex;
+
+  /* Stack the bar above its day label. */
+  flex-direction: column;
+
+  /* Align items horizontally. */
+  align-items: center;
+
+  /* Push the bars to the bottom of the chart area. */
+  justify-content: flex-end;
+
+  /* Set a small gap between the bar and label. */
+  gap: 9px;
+
+  /* Allow the column to fit its allocated width. */
+  min-width: 0;
+
+  /* Fill the chart's available height. */
+  height: 100%;
+}
+
+/* Style the individual chart bars. */
+.chart-bar {
+  /* Set the bar width. */
+  width: min(24px, 65%);
+
+  /* Apply a gradient from dark to light green. */
+  background: linear-gradient(180deg, #4b9d73, #176b4d);
+
+  /* Round the upper corners of each bar. */
+  border-radius: 6px 6px 2px 2px;
+
+  /* Prevent bars from shrinking in the chart layout. */
+  flex-shrink: 0;
+
+  /* Animate bar-height changes. */
+  transition: height 0.3s ease;
+}
+
+/* Style the labels below the chart bars. */
+.chart-column span {
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a small label size. */
+  font-size: 10px;
+}
+
+/* Style the small notes beneath demonstration content. */
+.demo-note {
+  /* Add space above the note. */
+  margin: 12px 0 0;
+
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a compact font size. */
+  font-size: 10px;
+}
+
+/* Arrange each low-stock action item horizontally. */
+.action-item {
+  /* Place the alert icon and medicine details on one row. */
+  display: flex;
+
+  /* Align the two items at the top. */
+  align-items: flex-start;
+
+  /* Add space between the icon and text. */
+  gap: 12px;
+
+  /* Add vertical spacing around the item. */
+  padding: 15px 0;
+
+  /* Separate the action items with a subtle line. */
+  border-bottom: 1px solid #edf0ed;
+}
+
+/* Remove the divider from the final action item. */
+.action-item:last-child {
+  /* Keep the last item visually open at the bottom. */
+  border-bottom: 0;
+
+  /* Reduce unnecessary bottom spacing. */
+  padding-bottom: 0;
+}
+
+/* Style the alert icon for stock items needing attention. */
+.action-alert {
+  /* Keep the icon aligned within a fixed-size box. */
+  display: flex;
+
+  /* Center the icon vertically. */
+  align-items: center;
+
+  /* Center the icon horizontally. */
+  justify-content: center;
+
+  /* Set the alert box width. */
+  width: 30px;
+
+  /* Set the alert box height. */
+  height: 30px;
+
+  /* Use a pale warning background. */
+  background: var(--warning-bg);
+
+  /* Use a dark warning colour. */
+  color: var(--warning-text);
+
+  /* Round the alert box corners. */
+  border-radius: 9px;
+
+  /* Make the alert symbol bold. */
+  font-weight: 800;
+
+  /* Prevent the icon from shrinking. */
+  flex-shrink: 0;
+}
+
+/* Style the medicine name in each action item. */
+.action-item strong {
+  /* Set a compact name size. */
+  font-size: 12px;
+
+  /* Use a strong font weight. */
+  font-weight: 700;
+}
+
+/* Style the stock information in each action item. */
+.action-item p {
+  /* Add a small gap below the medicine name. */
+  margin: 4px 0 0;
+
+  /* Use muted text. */
+  color: var(--text-muted);
+
+  /* Set a small information size. */
+  font-size: 10px;
+}
+
+/* Style the table wrapper around the inventory table. */
+.table-wrap {
+  /* Allow horizontal scrolling on narrow screens. */
+  overflow-x: auto;
+
+  /* Keep the table inside its panel. */
+  width: 100%;
+}
+
+/* Style the medicine inventory table. */
+table {
+  /* Make table borders share a common border model. */
+  border-collapse: collapse;
+
+  /* Fill the available wrapper width. */
+  width: 100%;
+
+  /* Keep columns readable when horizontal scrolling is available. */
+  min-width: 650px;
+
+  /* Set the table's default text size. */
+  font-size: 11px;
+}
+
+/* Style table headings and cells. */
+th,
+td {
+  /* Align cell content to the left. */
+  text-align: left;
+
+  /* Add spacing inside each cell. */
+  padding: 14px 12px;
+
+  /* Separate rows with a subtle border. */
+  border-bottom: 1px solid #edf0ed;
+}
+
+/* Style the table header row. */
+th {
+  /* Use a pale background for column headings. */
+  background: #f7f9f7;
+
+  /* Use the secondary text colour. */
+  color: var(--text-muted);
+
+  /* Make headings bold. */
+  font-weight: 700;
+
+  /* Prevent heading text from wrapping unexpectedly. */
+  white-space: nowrap;
+}
+
+/* Remove the bottom border from the final table row. */
+tbody tr:last-child td {
+  /* Keep the table's bottom edge visually clean. */
+  border-bottom: 0;
+}
+
+/* Add a subtle hover background to inventory rows. */
+tbody tr:hover {
+  /* Highlight the row currently under the pointer. */
+  background: #fafcfb;
+}
+
+/* Create the common base style for stock status badges. */
+.status {
+  /* Display the badge as a compact inline element. */
+  display: inline-block;
+
+  /* Add internal spacing around the label. */
+  padding: 5px 8px;
+
+  /* Round the badge corners. */
+  border-radius: 7px;
+
+  /* Prevent the status label from wrapping. */
+  white-space: nowrap;
+
+  /* Use a small font size. */
+  font-size: 10px;
+
+  /* Make the status label bold. */
+  font-weight: 700;
+}
+
+/* Style the critical stock status. */
+.status.critical {
+  /* Apply a pale red background. */
+  background: var(--danger-bg);
+
+  /* Apply dark red text. */
+  color: var(--danger-text);
+}
+
+/* Style the low-stock status. */
+.status.low {
+  /* Apply a pale amber background. */
+  background: var(--warning-bg);
+
+  /* Apply dark amber text. */
+  color: var(--warning-text);
+}
+
+/* Style the healthy stock status. */
+.status.healthy {
+  /* Apply a pale green background. */
+  background: var(--success-bg);
+
+  /* Apply dark green text. */
+  color: var(--success-text);
+}
+
+/* Style the placeholder panels used for unfinished pages. */
+.page-placeholder {
+  /* Set a comfortable minimum height. */
+  min-height: 220px;
+}
+
+/* Style the accessibility-only label. */
+.sr-only {
+  /* Position the element without taking up visible layout space. */
+  position: absolute;
+
+  /* Reduce the visible dimensions. */
+  width: 1px;
+  height: 1px;
+
+  /* Hide the element outside the visible viewport area. */
+  padding: 0;
+  margin: -1px;
+
+  /* Clip the element visually while preserving screen-reader access. */
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+
+  /* Prevent the clipped element from wrapping. */
+  white-space: nowrap;
+
+  /* Remove the element from the normal visible layout. */
+  border: 0;
+}
+
+/* Style the footer at the bottom of the main page. */
+.page-footer {
+  /* Arrange the copyright and tagline horizontally. */
+  display: flex;
+
+  /* Place the two footer items at opposite ends. */
+  justify-content: space-between;
+
+  /* Align the items vertically. */
+  align-items: center;
+
+  /* Add space above the footer. */
+  margin-top: 28px;
+
+  /* Add spacing above the footer border. */
+  padding-top: 18px;
+
+  /* Separate the footer from the content above it. */
+  border-top: 1px solid var(--border);
+
+  /* Use muted footer text. */
+  color: var(--text-muted);
+
+  /* Set a small footer font size. */
+  font-size: 10px;
+
+  /* Add spacing if the footer items wrap. */
+  gap: 12px;
+}
+
+/* Adjust the layout for medium-sized screens such as tablets. */
+@media (max-width: 1100px) {
+  /* Reduce the sidebar width on medium screens. */
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  /* Reduce the content padding to create more usable space. */
+  .page-content {
+    padding: 28px 24px;
+  }
+
+  /* Display KPI cards in two columns. */
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Stack the main dashboard panels vertically. */
+  .content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Reduce the header's horizontal padding. */
+  .topbar {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}
+
+/* Adjust the layout for mobile screens. */
+@media (max-width: 700px) {
+  /* Change the application to a single-column layout. */
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Remove the full-height sidebar requirement on mobile. */
+  .sidebar {
+    min-height: auto;
+    padding: 18px 14px;
+  }
+
+  /* Reduce the brand's bottom spacing on mobile. */
+  .brand {
+    margin-bottom: 20px;
+  }
+
+  /* Keep the navigation horizontally scrollable on small screens. */
+  .sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+
+  /* Keep each navigation button readable in the horizontal list. */
+  .nav-item {
+    width: auto;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  /* Hide the decorative sidebar footer to save mobile space. */
+  .sidebar-footer {
+    display: none;
+  }
+
+  /* Reduce the header spacing on mobile. */
+  .topbar {
+    min-height: 58px;
+    padding: 14px 18px;
+    gap: 12px;
+  }
+
+  /* Reduce the main content padding on mobile. */
+  .page-content {
+    padding: 24px 16px;
+  }
+
+  /* Stack the welcome text and dropdown vertically. */
+  .welcome-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  /* Allow the reporting-period selector to fill the row. */
+  .period-select select {
+    width: 100%;
+  }
+
+  /* Keep KPI cards in two columns on most mobile screens. */
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  /* Reduce padding inside metric cards. */
+  .metric-card {
+    padding: 15px;
+  }
+
+  /* Reduce the KPI value size for smaller screens. */
+  .metric-value {
+    font-size: 21px;
+  }
+
+  /* Reduce panel padding on mobile. */
+  .panel {
+    padding: 17px;
+  }
+
+  /* Reduce the chart height slightly on mobile. */
+  .simple-chart {
+    height: 145px;
+  }
+
+  /* Allow the footer items to wrap onto separate lines. */
+  .page-footer {
+    flex-wrap: wrap;
+  }
+}
+
+/* Use a single KPI column on very narrow mobile screens. */
+@media (max-width: 380px) {
+  /* Stack metric cards when two columns would be too narrow. */
+  .metrics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Allow the header elements to wrap on very narrow screens. */
+  .topbar {
+    flex-wrap: wrap;
+  }
+}

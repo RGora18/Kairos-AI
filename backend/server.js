@@ -463,7 +463,253 @@ app.get("/api/purchases/:id", async (req, res, next) => {
     next(err);
   }
 });
+// ------------------------------------------------------------
+// Dashboard and report routes
+// ------------------------------------------------------------
 
+// Total bills, revenue and profit for sales on or after a date
+async function salesTotals(fromDate) {
+  const result = await Sale.aggregate([
+    { $match: { saleDate: { $gte: fromDate } } },
+    {
+      $group: {
+        _id: null,
+        bills: { $sum: 1 },
+        revenue: { $sum: "$totalAmount" },
+        profit: { $sum: "$grossProfit" },
+      },
+    },
+  ]);
+  const t = result[0] || { bills: 0, revenue: 0, profit: 0 };
+  return { bills: t.bills, revenue: round2(t.revenue), profit: round2(t.profit) };
+}
+
+// Main dashboard numbers
+app.get("/api/dashboard/summary", async (req, res, next) => {
+  try {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const thirtyDaysAgo = new Date(startOfToday.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const [today, last30Days, stock, lowStockCount, expiringCount, expiredCount] =
+      await Promise.all([
+        salesTotals(startOfToday),
+        salesTotals(thirtyDaysAgo),
+        Medicine.aggregate([
+          {
+            $group: {
+              _id: null,
+              totalMedicines: { $sum: 1 },
+              totalUnits: { $sum: "$currentStock" },
+              inventoryValue: { $sum: { $multiply: ["$currentStock", "$purchasePrice"] } },
+            },
+          },
+        ]),
+        Medicine.countDocuments({ $expr: { $lte: ["$currentStock", "$minimumStock"] } }),
+        Medicine.countDocuments({ expiryDate: { $gt: now, $lte: in30Days } }),
+        Medicine.countDocuments({ expiryDate: { $lte: now } }),
+      ]);
+
+    const s = stock[0] || { totalMedicines: 0, totalUnits: 0, inventoryValue: 0 };
+
+    res.json({
+      success: true,
+      data: {
+        today,
+        last30Days,
+        inventory: {
+          totalMedicines: s.totalMedicines,
+          totalUnits: s.totalUnits,
+          inventoryValue: round2(s.inventoryValue),
+          lowStockCount,
+          expiringSoonCount: expiringCount,
+          expiredCount,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Best-selling medicines (default: last 30 days, top 5)
+app.get("/api/dashboard/top-selling", async (req, res, next) => {
+  try {
+    const days = Number(req.query.days) || 30;
+    const limit = Number(req.query.limit) || 5;
+    const fromDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const data = await Sale.aggregate([
+      { $match: { saleDate: { $gte: fromDate } } },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: "$items.medicineId",
+          medicineName: { $first: "$items.medicineName" },
+          unitsSold: { $sum: "$items.quantity" },
+          revenue: { $sum: "$items.subtotal" },
+        },
+      },
+      { $sort: { unitsSold: -1 } },
+      { $limit: limit },
+    ]);
+
+    res.json({ success: true, days, count: data.length, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Daily sales report between two dates
+// Example: /api/reports/sales?from=2026-10-01&to=2026-10-31
+app.get("/api/reports/sales", async (req, res, next) => {
+  try {
+    const now = new Date();
+    const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999`) : now;
+    const from = req.query.from
+      ? new Date(`${req.query.from}T00:00:00.000`)
+      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+      throw new HttpError(400, "Invalid date. Use the format YYYY-MM-DD");
+    }
+
+    const data = await Sale.aggregate([
+      { $match: { saleDate: { $gte: from, $lte: to } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$saleDate", timezone: "Asia/Kolkata" } },
+          bills: { $sum: 1 },
+          revenue: { $sum: "$totalAmount" },
+          profit: { $sum: "$grossProfit" },
+        },
+      },
+      { $sort: { _id: 1 } },
+      { $project: { _id: 0, date: "$_id", bills: 1, revenue: { $round: ["$revenue", 2] }, profit: { $round: ["$profit", 2] } } },
+    ]);
+
+    res.json({ success: true, count: data.length, data });
+  } catch (err) {
+    next(err);
+  }
+});
+// ------------------------------------------------------------
+// Recommendations: reorder suggestions and expiry risk
+// Example: /api/recommendations/reorder?days=30&leadTimeDays=7&coverDays=30
+//   days         = how many days of sales history to use for demand
+//   leadTimeDays = how many days a supplier delivery takes
+//   coverDays    = how many days of stock we want after delivery
+// ------------------------------------------------------------
+app.get("/api/recommendations/reorder", async (req, res, next) => {
+  try {
+    const DAY = 24 * 60 * 60 * 1000;
+    const days = Number(req.query.days) || 30;
+    const leadTimeDays = Number(req.query.leadTimeDays) || 7;
+    const coverDays = Number(req.query.coverDays) || 30;
+    const now = new Date();
+    const fromDate = new Date(now.getTime() - days * DAY);
+    const round1 = (n) => Math.round(n * 10) / 10;
+
+    // Step 1: units sold per medicine in the chosen period
+    const sold = await Sale.aggregate([
+      { $match: { saleDate: { $gte: fromDate } } },
+      { $unwind: "$items" },
+      { $group: { _id: "$items.medicineId", unitsSold: { $sum: "$items.quantity" } } },
+    ]);
+    const soldMap = new Map(sold.map((s) => [String(s._id), s.unitsSold]));
+
+    // Step 2: look at every medicine that has not expired yet
+    const medicines = await Medicine.find({ expiryDate: { $gt: now } });
+
+    const data = medicines.map((m) => {
+      const unitsSold = soldMap.get(String(m._id)) || 0;
+      const avgDailyDemand = unitsSold / days;
+      const daysToExpiry = Math.floor((m.expiryDate - now) / DAY);
+      const daysOfStockLeft =
+        avgDailyDemand > 0 ? round1(m.currentStock / avgDailyDemand) : null;
+
+      // Reorder when stock is at or below: demand during delivery + minimum stock
+      const reorderPoint = Math.ceil(avgDailyDemand * leadTimeDays) + (m.minimumStock || 0);
+
+      // Never plan to stock more than can be sold before the expiry date
+      const horizonDays = Math.min(leadTimeDays + coverDays, daysToExpiry);
+      const targetStock = Math.ceil(avgDailyDemand * horizonDays);
+
+      let suggestedOrderQty = 0;
+      let status = "OK";
+      if (m.currentStock <= reorderPoint) {
+        suggestedOrderQty = Math.max(0, targetStock - m.currentStock);
+        if (suggestedOrderQty > 0) {
+          const runsOutBeforeDelivery =
+            daysOfStockLeft !== null && daysOfStockLeft < leadTimeDays;
+          status = runsOutBeforeDelivery || m.currentStock === 0 ? "CRITICAL" : "REORDER";
+        }
+      }
+
+      // Expiry risk: units that will probably not sell before the expiry date
+      let unitsAtRisk = 0;
+      if (daysToExpiry <= 90) {
+        const expectedSales = Math.floor(avgDailyDemand * daysToExpiry);
+        unitsAtRisk = Math.max(0, m.currentStock - expectedSales);
+      }
+      const valueAtRisk = round2(unitsAtRisk * m.purchasePrice);
+
+      // Plain-language advice (the chatbot and dashboard can show this)
+      const advice = [];
+      if (suggestedOrderQty > 0) {
+        advice.push(
+          `Order about ${suggestedOrderQty} units of ${m.name}. Current stock lasts about ${daysOfStockLeft} days and delivery takes ${leadTimeDays} days.`
+        );
+      }
+      if (unitsAtRisk > 0) {
+        advice.push(
+          `About ${unitsAtRisk} units of ${m.name} may expire unsold in ${daysToExpiry} days. Consider a discount or returning them to the supplier.`
+        );
+      }
+      if (advice.length === 0) advice.push(`Stock level of ${m.name} is healthy.`);
+
+      return {
+        medicineId: m._id,
+        name: m.name,
+        currentStock: m.currentStock,
+        minimumStock: m.minimumStock,
+        avgDailyDemand: round1(avgDailyDemand),
+        daysOfStockLeft,
+        reorderPoint,
+        status,
+        suggestedOrderQty,
+        daysToExpiry,
+        unitsAtRisk,
+        valueAtRisk,
+        supplier: m.supplier,
+        advice,
+      };
+    });
+
+    // Most urgent first
+    const rank = { CRITICAL: 0, REORDER: 1, OK: 2 };
+    data.sort(
+      (a, b) =>
+        rank[a.status] - rank[b.status] ||
+        (a.daysOfStockLeft ?? Infinity) - (b.daysOfStockLeft ?? Infinity)
+    );
+
+    res.json({
+      success: true,
+      params: { days, leadTimeDays, coverDays },
+      summary: {
+        critical: data.filter((d) => d.status === "CRITICAL").length,
+        reorder: data.filter((d) => d.status === "REORDER").length,
+        withExpiryRisk: data.filter((d) => d.unitsAtRisk > 0).length,
+      },
+      count: data.length,
+      data,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 // ------------------------------------------------------------
 // Error handler (always returns JSON)
 // ------------------------------------------------------------

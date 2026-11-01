@@ -711,6 +711,143 @@ app.get("/api/recommendations/reorder", async (req, res, next) => {
   }
 });
 // ------------------------------------------------------------
+// Assistant: answers owner questions using real data
+// Rule-based (keyword matching). It calls our own API endpoints,
+// so every number comes from the database, never invented.
+// POST /api/assistant/ask   body: { "question": "What should I reorder?" }
+// ------------------------------------------------------------
+app.post("/api/assistant/ask", async (req, res, next) => {
+  try {
+    const question = String(req.body.question || "").trim();
+    if (!question) throw new HttpError(400, "question is required");
+
+    const q = question.toLowerCase();
+    const DAY = 24 * 60 * 60 * 1000;
+    const base = `http://localhost:${process.env.PORT || 5000}`;
+    const get = async (path) => (await fetch(base + path)).json();
+    const has = (...words) => words.some((w) => q.includes(w));
+
+    let intent = "help";
+    let answer = "";
+    let data = null;
+
+    // 1) Question about one specific medicine (matches the first word of its name)
+    const medsRes = await get("/api/medicines");
+    const mentioned = medsRes.data.find((m) => q.includes(m.name.split(" ")[0].toLowerCase()));
+
+    if (mentioned) {
+      intent = "medicine";
+      const rec = (await get("/api/recommendations/reorder")).data.find(
+        (r) => String(r.medicineId) === String(mentioned._id)
+      );
+      if (!rec) {
+        answer = `${mentioned.name} has expired. Stock on record: ${mentioned.currentStock} units.`;
+      } else {
+        const demand =
+          rec.daysOfStockLeft !== null
+            ? `Current stock is ${rec.currentStock} units, enough for about ${rec.daysOfStockLeft} days.`
+            : `Current stock is ${rec.currentStock} units and there were no recent sales.`;
+        answer = `${demand} ${rec.advice.join(" ")}`;
+      }
+      data = rec || mentioned;
+
+    // 2) Reorder questions
+    } else if (has("reorder", "order", "restock", "buy", "purchase")) {
+      intent = "reorder";
+      const rec = await get("/api/recommendations/reorder");
+      const needed = rec.data.filter((r) => r.status !== "OK");
+      answer = needed.length
+        ? "You should reorder:\n" +
+          needed
+            .map(
+              (r) =>
+                `- ${r.name}: about ${r.suggestedOrderQty} units (${r.status}). Stock lasts about ${r.daysOfStockLeft} days.`
+            )
+            .join("\n")
+        : "All medicines have healthy stock levels. Nothing needs to be reordered right now.";
+      data = needed;
+
+    // 3) Expiry questions
+    } else if (has("expir", "expire", "expiry")) {
+      intent = "expiry";
+      const exp = await get("/api/medicines/expiring?days=30");
+      const rec = await get("/api/recommendations/reorder");
+      const risky = rec.data.filter((r) => r.unitsAtRisk > 0);
+      answer = exp.count
+        ? "Expiring within 30 days:\n" +
+          exp.data
+            .map((m) => {
+              const left = Math.floor((new Date(m.expiryDate) - new Date()) / DAY);
+              return `- ${m.name}: expires in ${left} days (stock: ${m.currentStock} units)`;
+            })
+            .join("\n")
+        : "No medicine expires within the next 30 days.";
+      if (risky.length) {
+        answer +=
+          "\nLikely to expire unsold:\n" +
+          risky.map((r) => `- ${r.name}: about ${r.unitsAtRisk} units (cost Rs. ${r.valueAtRisk})`).join("\n");
+      } else if (exp.count) {
+        answer += "\nBased on current sales speed, these should sell before they expire.";
+      }
+      data = exp.data;
+
+    // 4) Low stock questions
+    } else if (has("low stock", "running low", "shortage", "out of stock", "minimum")) {
+      intent = "low-stock";
+      const low = await get("/api/medicines/low-stock");
+      answer = low.count
+        ? "Below minimum stock:\n" +
+          low.data.map((m) => `- ${m.name}: ${m.currentStock} units (minimum ${m.minimumStock})`).join("\n")
+        : "No medicine is below its minimum stock level.";
+      data = low.data;
+
+    // 5) Best sellers
+    } else if (has("top", "best", "popular", "most sold", "selling")) {
+      intent = "top-selling";
+      const top = await get("/api/dashboard/top-selling?days=30&limit=3");
+      answer = top.count
+        ? "Best sellers in the last 30 days:\n" +
+          top.data.map((t, i) => `${i + 1}. ${t.medicineName}: ${t.unitsSold} units, Rs. ${t.revenue}`).join("\n")
+        : "There are no sales in the last 30 days yet.";
+      data = top.data;
+
+    // 6) Sales, revenue, profit
+    } else if (has("sale", "revenue", "profit", "earn", "income")) {
+      intent = "sales";
+      const s = (await get("/api/dashboard/summary")).data;
+      answer =
+        `Today: ${s.today.bills} bills, revenue Rs. ${s.today.revenue}, profit Rs. ${s.today.profit}.\n` +
+        `Last 30 days: ${s.last30Days.bills} bills, revenue Rs. ${s.last30Days.revenue}, profit Rs. ${s.last30Days.profit}.`;
+      data = s;
+
+    // 7) Inventory value
+    } else if (has("inventory", "stock value", "worth", "total stock")) {
+      intent = "inventory";
+      const s = (await get("/api/dashboard/summary")).data.inventory;
+      answer =
+        `You have ${s.totalMedicines} medicines with ${s.totalUnits} units in stock, worth Rs. ${s.inventoryValue} at purchase price. ` +
+        `${s.lowStockCount} below minimum stock, ${s.expiringSoonCount} expiring soon, ${s.expiredCount} expired.`;
+      data = s;
+
+    // 8) Anything else
+    } else {
+      answer =
+        "I can help with questions like:\n" +
+        "- What should I reorder?\n" +
+        "- Which medicines are expiring?\n" +
+        "- Which medicines are low on stock?\n" +
+        "- What are the best sellers?\n" +
+        "- How are sales and profit?\n" +
+        "- What is my inventory value?\n" +
+        "- How is Paracetamol doing? (any medicine name)";
+    }
+
+    res.json({ success: true, question, intent, answer, data });
+  } catch (err) {
+    next(err);
+  }
+});
+// ------------------------------------------------------------
 // Error handler (always returns JSON)
 // ------------------------------------------------------------
 app.use((err, req, res, next) => {

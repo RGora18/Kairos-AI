@@ -1,527 +1,299 @@
+// ============================================================
+// Kairos AI - Backend (server.js)
+// Medicines, Sales, Purchases with automatic stock updates
+// ============================================================
 
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
-require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Middleware
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json());
 
-// ==============================
-// MEDICINE MODEL
-// ==============================
+// ------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------
+
+// Custom error that carries an HTTP status code
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+// Round money to 2 decimal places
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Validate the "items" array sent in sales and purchase requests
+function validateItems(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new HttpError(400, "items must be a non-empty array");
+  }
+  const seen = new Set();
+  for (const item of items) {
+    if (!mongoose.isValidObjectId(item.medicineId)) {
+      throw new HttpError(400, `Invalid medicineId: ${item.medicineId}`);
+    }
+    const qty = Number(item.quantity);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new HttpError(400, "quantity must be a whole number greater than 0");
+    }
+    // Do not allow the same medicine twice in one request
+    if (seen.has(String(item.medicineId))) {
+      throw new HttpError(400, "Same medicine appears twice in items");
+    }
+    seen.add(String(item.medicineId));
+  }
+}
+
+// ------------------------------------------------------------
+// Models
+// ------------------------------------------------------------
 
 const medicineSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    category: { type: String, required: true, trim: true },
-    batchNumber: { type: String, required: true, trim: true },
+    category: { type: String, trim: true, default: "General" },
+    batchNumber: { type: String, trim: true },
     currentStock: { type: Number, required: true, min: 0, default: 0 },
-    minimumStock: { type: Number, required: true, min: 0, default: 10 },
+    minimumStock: { type: Number, min: 0, default: 0 },
     purchasePrice: { type: Number, required: true, min: 0 },
     sellingPrice: { type: Number, required: true, min: 0 },
     expiryDate: { type: Date, required: true },
-    supplier: { type: String, trim: true, default: "Unknown" }
+    supplier: { type: String, trim: true },
   },
   { timestamps: true }
 );
-
 const Medicine = mongoose.model("Medicine", medicineSchema);
 
-// ==============================
-// SALES MODEL
-// ==============================
+const saleItemSchema = new mongoose.Schema(
+  {
+    medicineId: { type: mongoose.Schema.Types.ObjectId, ref: "Medicine", required: true },
+    medicineName: String,
+    batchNumber: String,
+    quantity: { type: Number, required: true },
+    unitSellingPrice: { type: Number, required: true },
+    unitPurchaseCost: { type: Number, required: true },
+    subtotal: { type: Number, required: true },
+  },
+  { _id: false }
+);
 
 const saleSchema = new mongoose.Schema(
   {
-    billNumber: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    items: [
-      {
-        medicineId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Medicine",
-          required: true
-        },
-        medicineName: { type: String, required: true },
-        batchNumber: { type: String, required: true },
-        quantity: { type: Number, required: true, min: 1 },
-        unitPrice: { type: Number, required: true, min: 0 },
-        unitCost: { type: Number, required: true, min: 0 },
-        subtotal: { type: Number, required: true, min: 0 }
-      }
-    ],
-    totalAmount: { type: Number, required: true, min: 0 },
-    totalCost: { type: Number, required: true, min: 0 },
+    billNumber: { type: String, required: true, unique: true },
+    items: { type: [saleItemSchema], required: true },
+    totalAmount: { type: Number, required: true },
+    totalCost: { type: Number, required: true },
     grossProfit: { type: Number, required: true },
-    paymentMethod: {
-      type: String,
-      enum: ["Cash", "UPI", "Card", "Other"],
-      default: "Cash"
-    },
-    customerName: { type: String, trim: true, default: "Walk-in Customer" },
-    saleDate: { type: Date, default: Date.now }
+    paymentMethod: { type: String, default: "Cash" },
+    customerName: { type: String, default: "Walk-in Customer" },
+    saleDate: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
-
 const Sale = mongoose.model("Sale", saleSchema);
 
-// ==============================
-// PURCHASE MODEL
-// ==============================
+const purchaseItemSchema = new mongoose.Schema(
+  {
+    medicineId: { type: mongoose.Schema.Types.ObjectId, ref: "Medicine", required: true },
+    medicineName: String,
+    batchNumber: String,
+    quantity: { type: Number, required: true },
+    unitPurchasePrice: { type: Number, required: true },
+    subtotal: { type: Number, required: true },
+  },
+  { _id: false }
+);
 
 const purchaseSchema = new mongoose.Schema(
   {
-    purchaseNumber: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    supplier: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    items: [
-      {
-        medicineId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Medicine",
-          required: true
-        },
-        medicineName: { type: String, required: true },
-        batchNumber: { type: String, required: true },
-        quantity: { type: Number, required: true, min: 1 },
-        unitPrice: { type: Number, required: true, min: 0 },
-        subtotal: { type: Number, required: true, min: 0 }
-      }
-    ],
-    totalAmount: { type: Number, required: true, min: 0 },
-    purchaseDate: { type: Date, default: Date.now }
+    purchaseNumber: { type: String, required: true, unique: true },
+    supplier: { type: String, required: true, trim: true },
+    items: { type: [purchaseItemSchema], required: true },
+    totalAmount: { type: Number, required: true },
+    purchaseDate: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
-
 const Purchase = mongoose.model("Purchase", purchaseSchema);
 
-// ==============================
-// HELPER FUNCTIONS
-// ==============================
+// ------------------------------------------------------------
+// General routes
+// ------------------------------------------------------------
 
-const isValidId = (id) => mongoose.isValidObjectId(id);
-
-const isValidQuantity = (quantity) =>
-  Number.isInteger(quantity) && quantity > 0;
-
-const isValidPrice = (price) =>
-  Number.isFinite(price) && price >= 0;
-
-const roundMoney = (value) =>
-  Math.round((value + Number.EPSILON) * 100) / 100;
-
-const createReferenceNumber = (prefix) =>
-  `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-
-const handleError = (res, error, defaultMessage) => {
-  console.error(defaultMessage, error.message);
-
-  const clientErrorNames = [
-    "ValidationError",
-    "CastError"
-  ];
-
-  const status = clientErrorNames.includes(error.name) ? 400 : 500;
-
-  res.status(status).json({
-    success: false,
-    message: status === 400 ? error.message : defaultMessage
-  });
-};
-
-// ==============================
-// GENERAL ROUTES
-// ==============================
-
-// Welcome Route
 app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Welcome to Kairos AI Backend",
-    status: "running"
-  });
+  res.send("Welcome to Kairos AI backend");
 });
 
-// Health Check
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Kairos AI API is working",
-    database:
-      mongoose.connection.readyState === 1
-        ? "connected"
-        : "disconnected"
-  });
-});
-
-// Test Route
-app.get("/api/test-route", (req, res) => {
   res.json({
     success: true,
-    message: "Correct server file is running."
+    status: "OK",
+    database: mongoose.connection.readyState === 1 ? "connected" : "not connected",
   });
 });
 
-// ==============================
-// MEDICINE ROUTES
-// ==============================
-
-// GET All Medicines
-app.get("/api/medicines", async (req, res) => {
-  try {
-    const medicines = await Medicine.find().sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: medicines.length,
-      data: medicines
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch medicines.");
-  }
+app.get("/api/test-route", (req, res) => {
+  res.json({ success: true, message: "Test route is working (new server.js)" });
 });
 
-// GET Low-Stock Medicines
-app.get("/api/medicines/low-stock", async (req, res) => {
+// ------------------------------------------------------------
+// Medicine routes
+// NOTE: fixed routes (low-stock, expiring, expired) must come
+// BEFORE the "/:id" route, otherwise "low-stock" is treated as an id.
+// ------------------------------------------------------------
+
+// Medicines where current stock is at or below minimum stock
+app.get("/api/medicines/low-stock", async (req, res, next) => {
   try {
     const medicines = await Medicine.find({
-      $expr: {
-        $lte: ["$currentStock", "$minimumStock"]
-      }
+      $expr: { $lte: ["$currentStock", "$minimumStock"] },
     }).sort({ currentStock: 1 });
-
-    res.status(200).json({
-      success: true,
-      count: medicines.length,
-      data: medicines
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch low-stock medicines.");
+    res.json({ success: true, count: medicines.length, data: medicines });
+  } catch (err) {
+    next(err);
   }
 });
 
-// GET Medicines Approaching Expiry
-app.get("/api/medicines/expiring", async (req, res) => {
+// Medicines expiring within the next N days (default 30)
+app.get("/api/medicines/expiring", async (req, res, next) => {
   try {
     const days = Number(req.query.days) || 30;
-
-    if (!Number.isInteger(days) || days < 1 || days > 365) {
-      return res.status(400).json({
-        success: false,
-        message: "Days must be between 1 and 365."
-      });
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const expiryLimit = new Date(today);
-    expiryLimit.setDate(expiryLimit.getDate() + days);
-
+    const now = new Date();
+    const limit = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
     const medicines = await Medicine.find({
-      expiryDate: { $gte: today, $lte: expiryLimit },
-      currentStock: { $gt: 0 }
+      expiryDate: { $gt: now, $lte: limit },
     }).sort({ expiryDate: 1 });
-
-    res.status(200).json({
-      success: true,
-      count: medicines.length,
-      data: medicines
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch expiring medicines.");
+    res.json({ success: true, count: medicines.length, days, data: medicines });
+  } catch (err) {
+    next(err);
   }
 });
 
-// GET Expired Medicines
-app.get("/api/medicines/expired", async (req, res) => {
+// Medicines that are already expired
+app.get("/api/medicines/expired", async (req, res, next) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const medicines = await Medicine.find({
-      expiryDate: { $lt: today },
-      currentStock: { $gt: 0 }
+      expiryDate: { $lte: new Date() },
     }).sort({ expiryDate: 1 });
-
-    res.status(200).json({
-      success: true,
-      count: medicines.length,
-      data: medicines
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch expired medicines.");
+    res.json({ success: true, count: medicines.length, data: medicines });
+  } catch (err) {
+    next(err);
   }
 });
 
-// GET Medicine by ID
-app.get("/api/medicines/:id", async (req, res) => {
+// Get all medicines
+app.get("/api/medicines", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    if (!isValidId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid medicine ID."
-      });
-    }
-
-    const medicine = await Medicine.findById(id);
-
-    if (!medicine) {
-      return res.status(404).json({
-        success: false,
-        message: "Medicine not found."
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: medicine
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch medicine.");
+    const medicines = await Medicine.find().sort({ name: 1 });
+    res.json({ success: true, count: medicines.length, data: medicines });
+  } catch (err) {
+    next(err);
   }
 });
 
-// ADD Medicine
-app.post("/api/medicines", async (req, res) => {
+// Add a medicine
+app.post("/api/medicines", async (req, res, next) => {
   try {
     const medicine = await Medicine.create(req.body);
-
-    res.status(201).json({
-      success: true,
-      message: "Medicine added successfully.",
-      data: medicine
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to add medicine.");
+    res.status(201).json({ success: true, data: medicine });
+  } catch (err) {
+    next(err);
   }
 });
 
-// UPDATE Medicine
-app.put("/api/medicines/:id", async (req, res) => {
+// Get one medicine by id
+app.get("/api/medicines/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    if (!isValidId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid medicine ID."
-      });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      throw new HttpError(400, "Invalid medicine id");
     }
-
-    const allowedFields = [
-      "name",
-      "category",
-      "batchNumber",
-      "currentStock",
-      "minimumStock",
-      "purchasePrice",
-      "sellingPrice",
-      "expiryDate",
-      "supplier"
-    ];
-
-    const updates = {};
-
-    allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
-      }
-    });
-
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid fields provided for update."
-      });
-    }
-
-    const medicine = await Medicine.findByIdAndUpdate(
-      id,
-      { $set: updates },
-      { new: true, runValidators: true }
-    );
-
-    if (!medicine) {
-      return res.status(404).json({
-        success: false,
-        message: "Medicine not found."
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Medicine updated successfully.",
-      data: medicine
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to update medicine.");
+    const medicine = await Medicine.findById(req.params.id);
+    if (!medicine) throw new HttpError(404, "Medicine not found");
+    res.json({ success: true, data: medicine });
+  } catch (err) {
+    next(err);
   }
 });
 
-// DELETE Medicine
-app.delete("/api/medicines/:id", async (req, res) => {
+// Update a medicine
+app.put("/api/medicines/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    if (!isValidId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid medicine ID."
-      });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      throw new HttpError(400, "Invalid medicine id");
     }
-
-    const medicine = await Medicine.findByIdAndDelete(id);
-
-    if (!medicine) {
-      return res.status(404).json({
-        success: false,
-        message: "Medicine not found."
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Medicine deleted successfully."
+    const medicine = await Medicine.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
     });
-  } catch (error) {
-    handleError(res, error, "Failed to delete medicine.");
+    if (!medicine) throw new HttpError(404, "Medicine not found");
+    res.json({ success: true, data: medicine });
+  } catch (err) {
+    next(err);
   }
 });
 
-// ==============================
-// SALES ROUTES
-// ==============================
+// Delete a medicine
+app.delete("/api/medicines/:id", async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      throw new HttpError(400, "Invalid medicine id");
+    }
+    const medicine = await Medicine.findByIdAndDelete(req.params.id);
+    if (!medicine) throw new HttpError(404, "Medicine not found");
+    res.json({ success: true, message: "Medicine deleted", data: medicine });
+  } catch (err) {
+    next(err);
+  }
+});
 
-// CREATE Sale with Multiple Medicines
-app.post("/api/sales", async (req, res) => {
+// ------------------------------------------------------------
+// Sales routes
+// Request body example:
+// {
+//   "customerName": "Ravi",
+//   "paymentMethod": "Cash",
+//   "items": [ { "medicineId": "<id>", "quantity": 2 } ]
+// }
+// ------------------------------------------------------------
+
+app.post("/api/sales", async (req, res, next) => {
   const session = await mongoose.startSession();
-
   try {
-    const { items, paymentMethod, customerName } = req.body;
+    const { items, customerName, paymentMethod } = req.body;
+    validateItems(items);
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "A sale must contain at least one medicine."
-      });
-    }
+    let sale;
 
-    const validPaymentMethods = ["Cash", "UPI", "Card", "Other"];
-
-    if (
-      paymentMethod !== undefined &&
-      !validPaymentMethods.includes(paymentMethod)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payment method."
-      });
-    }
-
-    const consolidatedItems = new Map();
-
-    for (const item of items) {
-      if (!item.medicineId || !isValidId(item.medicineId)) {
-        return res.status(400).json({
-          success: false,
-          message: "Every sale item must have a valid medicine ID."
-        });
-      }
-
-      if (!isValidQuantity(item.quantity)) {
-        return res.status(400).json({
-          success: false,
-          message: "Medicine quantity must be a positive integer."
-        });
-      }
-
-      const key = String(item.medicineId);
-
-      consolidatedItems.set(
-        key,
-        (consolidatedItems.get(key) || 0) + item.quantity
-      );
-    }
-
-    const saleItems = [];
-    let totalAmount = 0;
-    let totalCost = 0;
-
+    // Everything inside withTransaction is saved together or rolled back together
     await session.withTransaction(async () => {
-      saleItems.length = 0;
-      totalAmount = 0;
-      totalCost = 0;
+      const saleItems = [];
 
-      for (const [medicineId, quantity] of consolidatedItems) {
-        const medicine = await Medicine.findById(medicineId).session(session);
+      for (const item of items) {
+        const qty = Number(item.quantity);
 
+        const medicine = await Medicine.findById(item.medicineId).session(session);
         if (!medicine) {
-          throw new Error(`Medicine not found: ${medicineId}`);
+          throw new HttpError(404, `Medicine not found: ${item.medicineId}`);
+        }
+        if (medicine.expiryDate <= new Date()) {
+          throw new HttpError(400, `${medicine.name} is expired and cannot be sold`);
         }
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (medicine.expiryDate < today) {
-          throw new Error(
-            `${medicine.name} is expired and cannot be sold.`
-          );
-        }
-
-        if (medicine.currentStock < quantity) {
-          throw new Error(
-            `Insufficient stock for ${medicine.name}. Available: ${medicine.currentStock}, requested: ${quantity}.`
-          );
-        }
-
-        const unitPrice =
-          medicine.sellingPrice;
-
-        const unitCost =
-          medicine.purchasePrice;
-
-        if (!isValidPrice(unitPrice) || !isValidPrice(unitCost)) {
-          throw new Error(`Invalid price for ${medicine.name}.`);
-        }
-
-        const subtotal = roundMoney(unitPrice * quantity);
-        const costSubtotal = roundMoney(unitCost * quantity);
-
-        // Conditional stock deduction prevents negative stock.
-        const stockUpdate = await Medicine.updateOne(
-          {
-            _id: medicineId,
-            currentStock: { $gte: quantity }
-          },
-          {
-            $inc: { currentStock: -quantity }
-          },
-          { session }
+        // Deduct stock only if enough stock is available (prevents negative stock)
+        const updated = await Medicine.findOneAndUpdate(
+          { _id: medicine._id, currentStock: { $gte: qty } },
+          { $inc: { currentStock: -qty } },
+          { session, new: true }
         );
-
-        if (stockUpdate.modifiedCount !== 1) {
-          throw new Error(
-            `Stock changed while processing ${medicine.name}. Please retry.`
+        if (!updated) {
+          throw new HttpError(
+            400,
+            `Insufficient stock for ${medicine.name}. Available: ${medicine.currentStock}, requested: ${qty}`
           );
         }
 
@@ -529,180 +301,109 @@ app.post("/api/sales", async (req, res) => {
           medicineId: medicine._id,
           medicineName: medicine.name,
           batchNumber: medicine.batchNumber,
-          quantity,
-          unitPrice,
-          unitCost,
-          subtotal
+          quantity: qty,
+          unitSellingPrice: medicine.sellingPrice,
+          unitPurchaseCost: medicine.purchasePrice,
+          subtotal: round2(qty * medicine.sellingPrice),
         });
-
-        totalAmount += subtotal;
-        totalCost += costSubtotal;
       }
 
-      totalAmount = roundMoney(totalAmount);
-      totalCost = roundMoney(totalCost);
+      const totalAmount = round2(saleItems.reduce((sum, i) => sum + i.subtotal, 0));
+      const totalCost = round2(
+        saleItems.reduce((sum, i) => sum + i.quantity * i.unitPurchaseCost, 0)
+      );
 
-      const grossProfit = roundMoney(totalAmount - totalCost);
-
-      const billNumber = createReferenceNumber("BILL");
-
-      const createdSales = await Sale.create(
+      const created = await Sale.create(
         [
           {
-            billNumber,
+            billNumber: `BILL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             items: saleItems,
             totalAmount,
             totalCost,
-            grossProfit,
+            grossProfit: round2(totalAmount - totalCost),
             paymentMethod: paymentMethod || "Cash",
-            customerName: customerName || "Walk-in Customer"
-          }
+            customerName: customerName || "Walk-in Customer",
+          },
         ],
         { session }
       );
-
-      saleItems.createdSale = createdSales[0];
+      sale = created[0];
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Sale recorded and stock updated successfully.",
-      data: saleItems.createdSale
-    });
-  } catch (error) {
-    console.error("Sale creation error:", error.message);
-
-    res.status(
-      error.name === "ValidationError" ||
-      error.name === "CastError" ? 400 :
-      error.message.includes("not found") ||
-      error.message.includes("Insufficient") ||
-      error.message.includes("expired") ||
-      error.message.includes("Stock changed") ||
-      error.message.includes("Invalid price") ? 400 : 500
-    ).json({
-      success: false,
-      message: error.message || "Failed to record sale."
-    });
+    res.status(201).json({ success: true, data: sale });
+  } catch (err) {
+    next(err);
   } finally {
     await session.endSession();
   }
 });
 
-// GET All Sales
-app.get("/api/sales", async (req, res) => {
+app.get("/api/sales", async (req, res, next) => {
   try {
     const sales = await Sale.find().sort({ saleDate: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: sales.length,
-      data: sales
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch sales.");
+    res.json({ success: true, count: sales.length, data: sales });
+  } catch (err) {
+    next(err);
   }
 });
 
-// GET Sale by ID
-app.get("/api/sales/:id", async (req, res) => {
+app.get("/api/sales/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    if (!isValidId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid sale ID."
-      });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      throw new HttpError(400, "Invalid sale id");
     }
-
-    const sale = await Sale.findById(id);
-
-    if (!sale) {
-      return res.status(404).json({
-        success: false,
-        message: "Sale not found."
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: sale
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch sale.");
+    const sale = await Sale.findById(req.params.id);
+    if (!sale) throw new HttpError(404, "Sale not found");
+    res.json({ success: true, data: sale });
+  } catch (err) {
+    next(err);
   }
 });
 
-// ==============================
-// PURCHASE ROUTES
-// ==============================
+// ------------------------------------------------------------
+// Purchase routes
+// Request body example:
+// {
+//   "supplier": "MedLife Distributors",
+//   "items": [ { "medicineId": "<id>", "quantity": 50, "purchasePrice": 1.6 } ]
+// }
+// purchasePrice is optional (the medicine's current price is used if missing)
+// ------------------------------------------------------------
 
-// CREATE Purchase with Multiple Medicines
-app.post("/api/purchases", async (req, res) => {
+app.post("/api/purchases", async (req, res, next) => {
   const session = await mongoose.startSession();
-
   try {
-    const { supplier, items } = req.body;
-
-    if (!supplier || !supplier.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Supplier name is required."
-      });
+    const { items, supplier } = req.body;
+    if (!supplier || !String(supplier).trim()) {
+      throw new HttpError(400, "supplier is required");
     }
+    validateItems(items);
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "A purchase must contain at least one medicine."
-      });
-    }
-
-    const purchaseItems = [];
-    let totalAmount = 0;
+    let purchase;
 
     await session.withTransaction(async () => {
-      purchaseItems.length = 0;
-      totalAmount = 0;
+      const purchaseItems = [];
 
       for (const item of items) {
-        if (!item.medicineId || !isValidId(item.medicineId)) {
-          throw new Error("Every purchase item needs a valid medicine ID.");
-        }
-
-        if (!isValidQuantity(item.quantity)) {
-          throw new Error(
-            "Purchase quantity must be a positive integer."
-          );
-        }
+        const qty = Number(item.quantity);
 
         const medicine = await Medicine.findById(item.medicineId).session(session);
-
         if (!medicine) {
-          throw new Error(`Medicine not found: ${item.medicineId}`);
+          throw new HttpError(404, `Medicine not found: ${item.medicineId}`);
         }
 
         const unitPrice =
-          item.unitPrice === undefined
-            ? medicine.purchasePrice
-            : Number(item.unitPrice);
-
-        if (!isValidPrice(unitPrice)) {
-          throw new Error(`Invalid purchase price for ${medicine.name}.`);
+          item.purchasePrice !== undefined ? Number(item.purchasePrice) : medicine.purchasePrice;
+        if (Number.isNaN(unitPrice) || unitPrice < 0) {
+          throw new HttpError(400, `Invalid purchasePrice for ${medicine.name}`);
         }
 
-        const subtotal = roundMoney(unitPrice * item.quantity);
-
-        // Increase stock and update the latest purchase price.
+        // Increase stock and remember latest purchase price and supplier
         await Medicine.updateOne(
           { _id: medicine._id },
           {
-            $inc: { currentStock: item.quantity },
-            $set: {
-              purchasePrice: unitPrice,
-              supplier: supplier.trim()
-            }
+            $inc: { currentStock: qty },
+            $set: { purchasePrice: unitPrice, supplier: String(supplier).trim() },
           },
           { session }
         );
@@ -711,121 +412,89 @@ app.post("/api/purchases", async (req, res) => {
           medicineId: medicine._id,
           medicineName: medicine.name,
           batchNumber: medicine.batchNumber,
-          quantity: item.quantity,
-          unitPrice,
-          subtotal
+          quantity: qty,
+          unitPurchasePrice: unitPrice,
+          subtotal: round2(qty * unitPrice),
         });
-
-        totalAmount += subtotal;
       }
 
-      totalAmount = roundMoney(totalAmount);
+      const totalAmount = round2(purchaseItems.reduce((sum, i) => sum + i.subtotal, 0));
 
-      const purchaseNumber = createReferenceNumber("PUR");
-
-      const createdPurchases = await Purchase.create(
+      const created = await Purchase.create(
         [
           {
-            purchaseNumber,
-            supplier: supplier.trim(),
+            purchaseNumber: `PUR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            supplier: String(supplier).trim(),
             items: purchaseItems,
-            totalAmount
-          }
+            totalAmount,
+          },
         ],
         { session }
       );
-
-      purchaseItems.createdPurchase = createdPurchases[0];
+      purchase = created[0];
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Purchase recorded and stock updated successfully.",
-      data: purchaseItems.createdPurchase
-    });
-  } catch (error) {
-    console.error("Purchase creation error:", error.message);
-
-    res.status(
-      error.name === "ValidationError" ||
-      error.name === "CastError" ? 400 :
-      error.message.includes("Medicine not found") ||
-      error.message.includes("Invalid") ? 400 : 500
-    ).json({
-      success: false,
-      message: error.message || "Failed to record purchase."
-    });
+    res.status(201).json({ success: true, data: purchase });
+  } catch (err) {
+    next(err);
   } finally {
     await session.endSession();
   }
 });
 
-// GET All Purchases
-app.get("/api/purchases", async (req, res) => {
+app.get("/api/purchases", async (req, res, next) => {
   try {
     const purchases = await Purchase.find().sort({ purchaseDate: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: purchases.length,
-      data: purchases
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch purchases.");
+    res.json({ success: true, count: purchases.length, data: purchases });
+  } catch (err) {
+    next(err);
   }
 });
 
-// GET Purchase by ID
-app.get("/api/purchases/:id", async (req, res) => {
+app.get("/api/purchases/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    if (!isValidId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid purchase ID."
-      });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      throw new HttpError(400, "Invalid purchase id");
     }
-
-    const purchase = await Purchase.findById(id);
-
-    if (!purchase) {
-      return res.status(404).json({
-        success: false,
-        message: "Purchase not found."
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: purchase
-    });
-  } catch (error) {
-    handleError(res, error, "Failed to fetch purchase.");
+    const purchase = await Purchase.findById(req.params.id);
+    if (!purchase) throw new HttpError(404, "Purchase not found");
+    res.json({ success: true, data: purchase });
+  } catch (err) {
+    next(err);
   }
 });
 
-// ==============================
-// START SERVER
-// ==============================
+// ------------------------------------------------------------
+// Error handler (always returns JSON)
+// ------------------------------------------------------------
+app.use((err, req, res, next) => {
+  if (err instanceof HttpError) {
+    return res.status(err.status).json({ success: false, message: err.message });
+  }
+  if (err.name === "ValidationError") {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  if (err.name === "CastError") {
+    return res.status(400).json({ success: false, message: `Invalid value for ${err.path}` });
+  }
+  console.error(err);
+  res.status(500).json({ success: false, message: "Internal server error" });
+});
 
-async function startServer() {
-  try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error("MONGODB_URI is missing from the .env file.");
-    }
+// ------------------------------------------------------------
+// Connect to MongoDB, then start the server
+// ------------------------------------------------------------
+const PORT = process.env.PORT || 5000;
 
-    await mongoose.connect(process.env.MONGODB_URI);
-
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => {
     console.log("MongoDB Atlas connected successfully.");
-
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Kairos AI backend running on port ${PORT}`);
+    app.listen(PORT, () => {
+      console.log(`Kairos AI backend running at http://localhost:${PORT}`);
     });
-  } catch (error) {
-    console.error("Backend startup failed:", error.message);
+  })
+  .catch((err) => {
+    console.error("MongoDB connection failed:", err.message);
     process.exit(1);
-  }
-}
-
-startServer();
+  });

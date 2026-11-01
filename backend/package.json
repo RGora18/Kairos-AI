@@ -1,16 +1,12 @@
 {
   "name": "kairos",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
- "scripts": {
-  "start": "node server.js",
-  "test": "echo \"Error: no test specified\" && exit 1"
-}
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "description": "Kairos AI - pharmacy inventory and business intelligence backend",
+  "main": "server.js",
   "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^18.0.7",
